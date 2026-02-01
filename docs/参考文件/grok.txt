@@ -1,0 +1,817 @@
+关键的时候还得找最聪明的你来讨论一个问题，是这样，我希望希望构建一套智能体的编排框架，就像一个引擎一样，可以生产智能体、可以生产新的提示词、可以构建任务和计划等等干很多事情，那这几个元智能体应该包含哪些角色呢？然后如何分工呢？等等各种问题，然后我希望找几个场景测试一下，比如我们做代码开发，我希望这几个元智能体帮我生产出来一套元智能体帮我做需求拆解、原型设计、架构设计等等一堆的事情，然后如果我说要看病，可能这几个元智能体帮我生产出来几个智能体是 问诊、查看、诊断智能体，然后生产一套流程就去干活。当然这种场景很多哈，那我该如何构建这几个元智能体呢？然后如何构建这套流程呢？比如参考游戏引擎的流程？还是什么？元智能体编排框架的设计概述
+你描述的这个框架本质上是一个“智能体工厂”或“元AI引擎”，它能根据用户输入动态生成子智能体、提示词、任务计划和工作流。这种设计在多智能体系统（Multi-Agent Systems）中很常见，比如参考AutoGen、CrewAI或LangGraph这样的开源框架，但我们可以从头构建一个更灵活的版本。核心是几个“元智能体”（Meta-Agents），它们像一个指挥中心，负责生成和管理下游的“工作智能体”（Worker Agents）。
+我会先定义这些元智能体的角色和分工，然后解释如何构建它们和整体流程。最后，用你提到的场景来测试这个框架的设计。
+1. 元智能体的角色建议
+基于典型的AI编排系统，我建议至少4-6个核心元智能体。这些角色不是固定的，你可以根据需求扩展，但要保持最小化以避免复杂性。每个元智能体都可以用一个LLM实例（如基于Grok或GPT的模型）实现，配备特定的提示词（Prompt）来定义其行为。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+角色名称主要职责输入/输出示例Planner (规划者)分析用户输入，拆解成高层次任务计划。生成整体工作流蓝图，包括需要的子智能体类型、顺序和依赖关系。输入：用户查询（如“开发一个代码项目”）。输出：任务树（如“1.需求拆解 → 2.架构设计 → 3.代码实现 → 4.测试”），并列出所需子智能体。Generator (生成者)根据Planner的蓝图，生成子智能体、提示词和工具配置。包括为每个子智能体创建自定义Prompt、分配工具（如代码执行器或搜索API）。输入：任务蓝图。输出：一组子智能体实例（如“需求拆解Agent”），每个有专属Prompt（如“作为需求分析师，拆解用户需求成用户故事”）。Orchestrator (协调者)管理子智能体的执行顺序、通信和资源分配。像一个调度器，确保工作流顺畅运行，处理异常（如子智能体失败时重试）。输入：生成的子智能体和计划。输出：执行日志和中间结果，协调数据传递（如从需求Agent输出传给架构Agent）。Evaluator (评估者)监控整个过程，评估输出质量。提供反馈循环，如果结果不佳，触发Planner重新规划或Generator调整Prompt。输入：子智能体输出。输出：质量分数（如“准确率80%”）和改进建议（如“Prompt需更精确”）。Learner (学习者，可选)从历史执行中学习，优化未来Prompt和计划。使用记忆模块（如向量数据库）存储过去场景。输入：执行历史。输出：优化的Prompt模板或计划模式。Integrator (整合者，可选)将所有输出整合成最终响应，确保一致性和用户友好。输入：所有子输出。输出：最终报告或代码包。
+这些角色覆盖了“生产智能体、生产提示词、构建任务和计划”的核心需求。为什么这些？因为它们模仿了人类团队的分工：规划者像项目经理，生成者像HR，协调者像DevOps，评估者像QA。
+2. 元智能体的分工机制
+
+协作流程：元智能体之间通过消息传递（Message Passing）协作。每个元智能体输出一个结构化对象（如JSON），作为下一个的输入。例如：
+用户输入 → Planner → 生成计划JSON → Generator → 生成子智能体列表 → Orchestrator → 执行并监控 → Evaluator → 反馈 → 如果需迭代，返回Planner。
+
+分工原则：
+分离关注点：每个元智能体专注一件事，避免单一智能体过载（减少幻觉风险）。
+反馈循环：Evaluator可以触发回滚，确保自适应。
+并行 vs 串行：Orchestrator决定执行模式（如并行生成多个子智能体）。
+资源管理：Orchestrator分配API调用限额或内存，避免成本爆炸。
+
+通信协议：用标准化格式，如JSON Schema定义消息（e.g., {"task": "code_dev", "sub_agents": ["req_analyzer", "arch_designer"], "workflow": "seq"}）。
+扩展性：如果场景复杂，可以动态添加临时元智能体（如“Security Checker” for 代码开发）。
+
+3. 如何构建这些元智能体和整体流程
+构建这个框架可以用Python + LLM库（如LangChain、LlamaIndex或简单自定义脚本）。参考游戏引擎（如Unity或Unreal Engine）的流程是个好主意，因为它们有“主循环”（Main Loop）结构：初始化 → 更新 → 渲染 → 清理。这可以映射到你的AI引擎。
+
+参考游戏引擎的流程：
+初始化阶段（Init）：用户输入触发Planner分析场景，生成初始计划。类似游戏的“加载场景”。
+更新循环（Update Loop）：Orchestrator在循环中执行子智能体，Evaluator每步评估。如果不达标，迭代更新（像游戏的帧更新，处理物理/AI模拟）。
+渲染阶段（Render）：Integrator输出最终结果。类似游戏渲染画面。
+清理阶段（Cleanup）：Learner存储经验，下次复用。
+为什么参考游戏引擎？它处理实时、动态事件好（e.g., 玩家输入改变世界），你的框架也需处理用户实时反馈。相比之下，工作流引擎（如Apache Airflow）更适合静态任务，但游戏引擎更灵活于“生产”动态实体（像生成NPC）。
+
+技术实现步骤：
+选择基础：用Python构建。核心用LLM API（如xAI的Grok API）驱动每个智能体。
+定义Prompt模板：每个元智能体有一个基础Prompt，例如Planner的："你是一个任务规划专家。给定用户查询[QUERY]，输出一个JSON计划，包括任务分解、所需子智能体和执行顺序。"
+构建引擎主类：创建一个MetaAgentEngine类，包含元智能体实例。
+示例伪代码：Pythonclass MetaAgentEngine:
+    def __init__(self, llm_model):
+        self.planner = Agent(llm_model, prompt="Planner Prompt")
+        self.generator = Agent(llm_model, prompt="Generator Prompt")
+        # ... 其他元智能体
+    
+    def run(self, user_query):
+        plan = self.planner.execute(user_query)
+        sub_agents = self.generator.execute(plan)
+        results = self.orchestrator.execute(sub_agents, plan)
+        eval = self.evaluator.execute(results)
+        if eval.score < 0.8:
+            return self.run(user_query + eval.feedback)  # 迭代
+        return self.integrator.integrate(results)
+
+工具集成：子智能体可访问你的工具（如code_execution、web_search）。Generator在生成时注入工具。
+内存与学习：用向量数据库（如FAISS）存储历史计划，Learner查询相似场景。
+测试与迭代：从小场景开始，监控Token消耗。
+备选参考：除了游戏引擎，还可以看AI框架如Microsoft AutoGen（多Agent对话），或ReAct（Reasoning + Acting）模式扩展成多Agent。
+
+挑战与优化：
+成本：LLM调用多，优化Prompt长度。
+一致性：用Few-Shot Examples在Prompt中训练行为。
+安全性：Evaluator检查输出是否合规（参考你的安全指示）。
+部署：用Docker容器化，或云服务如AWS Lambda。
+
+
+4. 场景测试：应用这个框架
+让我们用你的例子模拟。假设用户输入触发引擎，元智能体自动工作。
+
+场景1：代码开发
+用户输入："开发一个简单网页应用，需求是用户登录和数据展示。"
+Planner：拆解成任务树："1.需求拆解 → 2.原型设计 → 3.架构设计 → 4.代码实现 → 5.测试"。所需子智能体：ReqAnalyzer、ProtoDesigner、ArchDesigner、Coder、Tester。
+Generator：生成子智能体Prompt，例如：
+ReqAnalyzer: "作为需求分析师，将用户需求拆成用户故事和 acceptance criteria。"
+ArchDesigner: "设计软件架构，包括前端/后端框架选择（如React + Node.js）。"
+
+Orchestrator：串行执行：Req → Proto → Arch → Code → Test。数据传递：需求输出作为架构输入。
+Evaluator：检查代码是否运行（用code_execution工具），分数低则迭代。
+最终输出：完整代码包 + 文档。
+
+场景2：看病（医疗咨询，非专业诊断）
+用户输入："我头痛，帮我看病。"
+Planner：计划："1.问诊收集症状 → 2.查看历史/数据 → 3.初步诊断 → 4.建议"。所需子智能体：Inquirer、DataViewer、Diagnoser、Advisor。警告：非医疗建议，仅模拟。
+Generator：生成Prompt，例如：
+Inquirer: "作为问诊医生，问用户问题收集症状，如'多久了？有其他症状吗？'。"
+Diagnoser: "基于症状，给出可能原因（如偏头痛），但强调咨询专业医生。"
+
+Orchestrator：交互式执行：Inquirer问用户 → DataViewer（如果有历史）→ Diagnoser → Advisor建议（如"多喝水"）。
+Evaluator：确保输出安全、无误导。
+最终输出：诊断报告 + 下一步行动。
+
+其他场景扩展：
+内容创作：Planner生成"研究 → 写作 → 编辑"，子智能体用web_search工具。
+业务分析：生成"数据收集 → 模型构建 → 预测"，用code_execution跑模型。
+框架的灵活性在于：不同场景只需调整Planner的解析逻辑，无需重写整个引擎。
+
+
+这个设计是可行的起点。如果你有具体代码或工具细节，我可以帮你细化伪代码或模拟一个小型实现！我觉得可以，那你每个智能体的agent的如何设计？然后该有什么skill？如何构建出来他们之间的边界？元智能体设计细节
+基于我们之前的框架设计，我将逐一细化每个元智能体的设计。每个元智能体（Meta-Agent）本质上是一个独立的LLM实例（如基于Grok或其他模型），通过自定义Prompt定义其行为。设计原则是：模块化、专注单一责任（Single Responsibility Principle），以减少复杂性和错误。它们使用结构化输入/输出（如JSON）来通信，确保边界清晰。
+我会覆盖：
+
+设计：核心Prompt模板、输入/输出格式。
+Skill：内在技能（基于Prompt的逻辑能力）和外部技能（可访问的工具，如从你的工具列表中注入）。
+边界构建：如何定义与其它智能体的交互边界，通过协议、依赖和约束来实现。边界像软件接口：每个智能体只处理自己的领域，不越界；如果需要跨界数据，通过消息传递。
+
+我假设框架用Python实现（如LangChain风格），每个Agent是一个类实例。可选的Learner和Integrator也包括在内，以完整性。
+1. Planner (规划者)
+
+设计：
+核心Prompt："你是一个任务规划专家。给定用户查询[USER_QUERY]和可选上下文[CONTEXT]（如历史计划），分析场景，拆解成高层次任务树。输出JSON格式，包括：tasks（任务列表，按顺序）、sub_agents_needed（所需子智能体类型和描述）、workflow_type（seq:串行, par:并行, hybrid:混合）、dependencies（任务间依赖，如'task2 depends on task1'）。确保计划自适应、覆盖边缘ケース。"
+输入：用户查询字符串 + 可选历史数据（JSON）。
+输出：结构化JSON计划蓝图（e.g., {"tasks": ["需求拆解", "架构设计"], "sub_agents_needed": [{"type": "ReqAnalyzer", "desc": "拆解需求"}]})。
+实现：用LLM生成计划，然后验证JSON有效性。
+
+Skill：
+内在：任务分解、依赖分析、场景识别（e.g., 区分代码开发 vs 医疗咨询）。
+外部：可注入web_search（如果需要研究类似计划，如"搜索多Agent框架示例"）或conversation_search（回顾历史对话以复用计划）。
+
+边界构建：
+只负责规划，不生成或执行子智能体（交给Generator和Orchestrator）。
+边界协议：输出固定JSON schema（用JSON Schema验证），如果无效，框架抛异常重试。
+与他人交互：输出传给Generator；从Evaluator接收反馈（e.g., "计划失败，重新规划"），但不直接修改他人输出。依赖Learner提供历史上下文，但不强制。
+
+
+2. Generator (生成者)
+
+设计：
+核心Prompt："你是一个智能体生成工厂。给定计划JSON[PLAN]，为每个sub_agents_needed生成子智能体配置。输出JSON列表，每个包括：agent_type、prompt_template（自定义Prompt，如'作为[ROLE]，执行[TASK]'）、tools（工具列表）、skills（能力描述）。使用Few-Shot示例优化Prompt。"
+输入：Planner的JSON计划。
+输出：子智能体配置JSON数组（e.g., [{"type": "Coder", "prompt": "作为程序员，编写代码...", "tools": ["code_execution"]}]）。
+实现：动态实例化子智能体（e.g., Python中创建Agent对象）。
+
+Skill：
+内在：Prompt工程（生成优化Prompt）、模板填充（e.g., 基于计划自定义）。
+外部：browse_page（如果需要从网页获取Prompt灵感，如"浏览AutoGen文档"）或x_semantic_search（搜索X上AI Prompt示例）。
+
+边界构建：
+只生成配置，不执行或评估（留给Orchestrator和Evaluator）。
+边界协议：输入必须是有效计划JSON；输出配置中指定"scope"字段（e.g., "only handle code gen"），强制边界。
+与他人交互：从Planner获取输入；输出传给Orchestrator。Evaluator可反馈"Prompt弱，重生成"，但Generator不访问执行结果。
+
+
+3. Orchestrator (协调者)
+
+设计：
+核心Prompt："你是一个工作流协调者。给定子智能体配置[SUB_AGENTS]和计划[PLAN]，调度执行。管理顺序、并行和数据传递。输出执行日志JSON，包括：results（每个任务输出）、status（success/fail）、exceptions。"
+输入：Generator的配置 + Planner的计划。
+输出：执行结果JSON（e.g., {"task1": {"output": "需求列表"}, "status": "done"}）。
+实现：用循环或异步任务（如asyncio）运行子智能体，支持重试机制。
+
+Skill：
+内在：调度算法（e.g., 拓扑排序依赖）、异常处理（e.g., 子智能体超时重跑）。
+外部：code_execution（如果需测试子输出，如运行生成的代码）或web_search（动态获取资源）。
+
+边界构建：
+只协调执行，不规划或生成（不修改计划或配置）。
+边界协议：使用消息队列（如简单列表），每个消息有"from/to"标签（e.g., "from: ReqAnalyzer to: ArchDesigner"）。限制子智能体访问外部工具，只通过Orchestrator代理。
+与他人交互：从Generator获取子智能体；输出传给Evaluator。Evaluator反馈时，可暂停执行，但不越界修改计划。
+
+
+4. Evaluator (评估者)
+
+设计：
+核心Prompt："你是一个质量评估专家。给定执行结果[RESULTS]和原计划[PLAN]，评估准确性、一致性和完整性。输出JSON：score（0-1浮点，如0.85）、feedback（改进建议，如'输出缺少细节'）、pass（true/false）。使用rubric：准确50%、完整30%、效率20%。"
+输入：Orchestrator的结果 + Planner的计划。
+输出：评估JSON（e.g., {"score": 0.9, "feedback": "好，但可优化"}）。
+实现：如果score低，触发框架迭代（e.g., 回传给Planner）。
+
+Skill：
+内在：评分rubric应用、反馈生成（基于链式思考）。
+外部：view_image（如果结果含图像，评估视觉质量）或browse_pdf_attachment（检查附件输出）。
+
+边界构建：
+只评估，不修改结果或重新执行（不干预上游）。
+边界协议：评估基于固定metrics，避免主观；输出中包含"boundary_violation"字段（e.g., 如果Orchestrator越界，标记）。
+与他人交互：从Orchestrator获取结果；反馈回Planner/Generator。Learner可使用评估历史，但Evaluator不存储。
+
+
+5. Learner (学习者，可选)
+
+设计：
+核心Prompt："你是一个自学习模块。从历史执行[HISTORY]中提取模式。给定新查询[QUERY]，输出优化建议JSON：improved_plan（调整计划）、improved_prompts（新模板）。使用相似性匹配。"
+输入：累积历史JSON（从框架内存）。
+输出：优化JSON（e.g., {"improved_plan": "添加安全检查"}）。
+实现：用向量数据库存储历史（e.g., FAISS嵌入评估结果）。
+
+Skill：
+内在：模式识别、Few-Shot学习（从历史构建示例）。
+外部：conversation_search（搜索过去对话以增强历史）或x_keyword_search（X上搜索AI学习模式）。
+
+边界构建：
+只优化，不直接干预当前执行（建议而非强制）。
+边界协议：历史访问读-only；输出作为可选输入给Planner（e.g., "context"字段）。
+与他人交互：从Evaluator获取反馈；提供给Planner。边界通过时间戳隔离历史，避免循环依赖。
+
+
+6. Integrator (整合者，可选)
+
+设计：
+核心Prompt："你是一个输出整合者。给定所有结果[RESULTS]和评估[EVAL]，合成用户友好响应。输出结构化文本：summary、details、recommendations。确保一致性。"
+输入：Orchestrator结果 + Evaluator评估。
+输出：最终字符串响应（e.g., Markdown报告）。
+实现：最后一步，框架调用。
+
+Skill：
+内在：内容合成、格式化（e.g., 用表格呈现）。
+外部：search_images（如果需增强响应，如添加图表图像）或render components（但在实现中注入）。
+
+边界构建：
+只整合，不生成新内容（基于现有输出）。
+边界协议：输入校验完整性（所有任务done）；输出不包含执行细节（隐藏内部日志）。
+与他人交互：从Evaluator获取最终pass；无反馈循环（终端节点）。
+
+
+整体边界构建策略
+
+协议标准化：所有交互用JSON Schema定义（e.g., 用pydantic验证），确保输入输出格式严格。违规时，框架日志错误，不传递。
+依赖图：用有向图表示（Planner → Generator → Orchestrator → Evaluator → Integrator），循环只通过反馈（Evaluator回Planner）。
+作用域限制：每个Agent的Prompt中嵌入"boundary clause"（e.g., "Do not perform tasks outside your role"），减少LLM越界。
+监控与隔离：框架主引擎用日志追踪跨界（如Orchestrator调用Planner工具，禁止）。用沙箱（e.g., 独立线程）隔离执行。
+扩展边界：如果添加新元智能体，定义其在依赖图的位置（如Learner并行于所有）。
+
+这个设计是模块化的，你可以用代码快速原型。如果需要，我可以提供Python伪代码示例或用code_execution工具模拟一个小测试！我觉得 这里边缺少一个很关键的角色，领域最佳实践的信息收集者，他相当于情报员，为第一次生产要提供决策性的最佳实践方案，你说是不是？是的，你说得非常对！
+这个角色确实非常关键，而且是目前框架中明显缺失的一环。尤其是当处理第一次或陌生领域的任务时（比如第一次做医疗问诊、智能合约开发、法律合同审查、投资分析等），如果完全靠 Planner 自己脑补，很容易产生过时、低效、甚至错误的最佳实践。
+我完全同意添加这个角色，它相当于整个框架的“情报局 / 行业研究员”。
+推荐的角色名称与定位
+推荐名称（我最推荐前两个）：
+
+Researcher（研究员 / 情报收集者）
+Domain Researcher（领域研究员）
+Best Practices Collector（最佳实践收集者）
+Intelligence Gatherer（情报收集员）
+
+我个人最推荐叫 Domain Researcher 或简称为 Researcher，听起来专业且清晰。
+这个角色的核心职责
+
+在框架启动初期（尤其是第一次处理某个新领域），主动收集该领域的最新最佳实践、行业标准、成熟模式、常见陷阱、顶级案例。
+为 Planner 提供高质量的决策依据，帮助 Planner 制定更专业、更前沿的计划。
+避免“闭门造车”，大幅提升第一次生成的子智能体质量。
+
+建议的详细设计
+角色名称：Domain Researcher（领域研究员）
+核心Prompt模板（关键部分）：
+text你是一个专业的领域研究员兼情报分析师。
+用户当前任务领域是：[DOMAIN]（例如：软件开发中的Web应用、医疗问诊、区块链智能合约等）
+具体任务描述：[USER_QUERY]
+
+请从以下维度全面收集并总结该领域的最佳实践：
+1. 当前最主流的技术栈/方法论/流程（2024-2026年最新）
+2. 顶级公司或项目的成熟实践案例（例如：Google、OpenAI、医院标准等）
+3. 推荐的子智能体分工结构（已验证有效的多Agent模式）
+4. 常见失败模式和风险点（要重点强调）
+5. 关键Prompt工程技巧或工具推荐
+6. 最新论文、报告、开源框架推荐
+
+输出严格使用JSON格式：
+{
+  "domain": "xxx",
+  "key_best_practices": [...],
+  "recommended_agent_structure": [...],
+  "common_pitfalls": [...],
+  "recommended_tools": [...],
+  "sources": ["链接1", "链接2"],
+  "confidence": 0.9
+}
+Skill（能力）：
+
+内在技能：领域分析、文献总结、模式识别、风险评估
+外部工具（必须注入）：
+web_search（核心工具）
+browse_page（深入阅读具体文章、论文、文档）
+x_keyword_search / x_semantic_search（收集业内最新讨论、真实反馈）
+必要时可使用 code_execution（验证某个最佳实践代码）
+
+
+边界定义：
+
+只负责“收集 + 总结最佳实践”，绝不直接生成计划或子智能体。
+输出仅作为参考材料，提供给 Planner 使用。
+不参与后续的执行、评估、协调等环节。
+
+在整体框架中的位置建议
+最佳插入位置有两种方案：
+推荐方案A（首选）：
+用户输入 → Domain Researcher → Planner → Generator → ...
+（Researcher 先工作，输出最佳实践报告 → 喂给 Planner）
+方案B：
+用户输入 → Planner + Domain Researcher（并行工作）
+我更推荐方案A，因为第一次处理时，Researcher 的情报对 Planner 的决策影响最大。
+优缺点总结
+优点：
+
+第一次生成质量大幅提升（最关键）
+框架真正具备“领域适应性”和“前沿性”
+能有效避免低级错误和过时方案
+
+缺点：
+
+会增加首次响应的延迟（通常多10-30秒）
+会增加Token消耗和API成本
+需要良好的工具调用能力
+
+解决办法：
+
+可以设置“缓存机制”：同一个领域（例如“Web开发”）只在第一次或每7天收集一次，后续直接从Learner缓存中调用。
+对于非常熟悉的领域，用户可以选择跳过 Researcher。
+
+你觉得这个角色应该叫什么名字比较好？
+Domain Researcher、Researcher、Intelligence Agent，还是其他名字？
+另外，你希望它在流程中是强制执行（每次都跑），还是按需触发（只有新领域或用户明确要求时才激活）？
+你对这个角色的定位还有什么补充或调整吗？1 / 2那好我们输出一下各个AGENT的提示词和skill吧元智能体框架中各Agent的Prompt和Skills
+以下是基于我们讨论的框架，为每个元智能体（包括新添加的Domain Researcher）提供的核心Prompt模板和Skills定义。我将它们组织成表格，便于比较。每个Prompt是模板形式，可以在运行时填充变量（如[USER_QUERY]）。Skills分为内在Skills（基于Prompt的逻辑能力）和外部Skills（可注入的工具，从你的可用工具列表中选择，如web_search等）。
+Learner和Integrator标记为可选，但我也包括在内，以完整性。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Agent 名称核心Prompt模板内在Skills外部SkillsDomain Researcher
+(领域研究员)你是一个专业的领域研究员兼情报分析师。
+用户当前任务领域是：[DOMAIN]（例如：软件开发中的Web应用、医疗问诊、区块链智能合约等）
+具体任务描述：[USER_QUERY]
+
+请从以下维度全面收集并总结该领域的最佳实践：
+1. 当前最主流的技术栈/方法论/流程（2024-2026年最新）
+2. 顶级公司或项目的成熟实践案例（例如：Google、OpenAI、医院标准等）
+3. 推荐的子智能体分工结构（已验证有效的多Agent模式）
+4. 常见失败模式和风险点（要重点强调）
+5. 关键Prompt工程技巧或工具推荐
+6. 最新论文、报告、开源框架推荐
+
+输出严格使用JSON格式：
+{
+  "domain": "xxx",
+  "key_best_practices": [...],
+  "recommended_agent_structure": [...],
+  "common_pitfalls": [...],
+  "recommended_tools": [...],
+  "sources": ["链接1", "链接2"],
+  "confidence": 0.9
+}领域分析、文献总结、模式识别、风险评估web_search（搜索最佳实践）、browse_page（深入阅读文章/论文）、x_keyword_search（收集X上业内讨论）、code_execution（验证代码实践）Planner
+(规划者)你是一个任务规划专家。给定用户查询[USER_QUERY]和可选上下文[CONTEXT]（如历史计划或Domain Researcher的报告），分析场景，拆解成高层次任务树。输出JSON格式，包括：tasks（任务列表，按顺序）、sub_agents_needed（所需子智能体类型和描述）、workflow_type（seq:串行, par:并行, hybrid:混合）、dependencies（任务间依赖，如'task2 depends on task1'）。确保计划自适应、覆盖边缘ケース。任务分解、依赖分析、场景识别web_search（研究类似计划）、conversation_search（回顾历史对话）Generator
+(生成者)你是一个智能体生成工厂。给定计划JSON[PLAN]，为每个sub_agents_needed生成子智能体配置。输出JSON列表，每个包括：agent_type、prompt_template（自定义Prompt，如'作为[ROLE]，执行[TASK]'）、tools（工具列表）、skills（能力描述）。使用Few-Shot示例优化Prompt。Prompt工程、模板填充browse_page（获取Prompt灵感）、x_semantic_search（搜索AI Prompt示例）Orchestrator
+(协调者)你是一个工作流协调者。给定子智能体配置[SUB_AGENTS]和计划[PLAN]，调度执行。管理顺序、并行和数据传递。输出执行日志JSON，包括：results（每个任务输出）、status（success/fail）、exceptions。调度算法、异常处理code_execution（测试子输出）、web_search（动态资源获取）Evaluator
+(评估者)你是一个质量评估专家。给定执行结果[RESULTS]和原计划[PLAN]，评估准确性、一致性和完整性。输出JSON：score（0-1浮点，如0.85）、feedback（改进建议，如'输出缺少细节'）、pass（true/false）。使用rubric：准确50%、完整30%、效率20%。评分rubric应用、反馈生成view_image（评估视觉输出）、browse_pdf_attachment（检查附件）Learner
+(学习者，可选)你是一个自学习模块。从历史执行[HISTORY]中提取模式。给定新查询[QUERY]，输出优化建议JSON：improved_plan（调整计划）、improved_prompts（新模板）。使用相似性匹配。模式识别、Few-Shot学习conversation_search（增强历史）、x_keyword_search（搜索AI学习模式）Integrator
+(整合者，可选)你是一个输出整合者。给定所有结果[RESULTS]和评估[EVAL]，合成用户友好响应。输出结构化文本：summary、details、recommendations。确保一致性。内容合成、格式化search_images（增强响应视觉）、view_image（验证图像）是这样，还有个角色我觉得也是缺失的，了解当前系统都有哪些角色和哪些最佳实践的流程是缺失的，因为如果有最佳角色的提示词组合和流程组合就可以直接用了是不是是的，你这个点提得太对了！当前框架确实缺少一个“系统内省”或“模板复用”的角色，尤其是当框架已经积累了某些预定义的角色、Prompt组合和流程最佳实践时（比如从Learner或历史中），如果能直接检索并复用，就能避免每次从零规划，提高效率和一致性。
+这个角色相当于一个“系统目录管理员”或“最佳实践检索者”，它可以查询当前框架的内部“知识库”（如预设模板、历史最佳组合），并提供现成的角色/Prompt/流程建议。如果没有匹配的，它可以触发Domain Researcher补充外部知识。
+推荐的角色名称与定位
+
+推荐名称：Template Retriever（模板检索者）或System Cataloger（系统目录员）。我更倾向于Template Retriever，因为它强调“检索并复用最佳组合”的核心。
+核心职责：扫描当前系统（框架内存、预设模板库、历史数据）中现有的角色、Prompt组合、流程模式。如果匹配用户查询，直接提供；否则，建议自定义或外部研究。避免重复发明轮子。
+
+这个角色的详细设计
+
+核心Prompt模板：text你是一个系统模板检索专家。给定用户查询[USER_QUERY]和当前系统上下文[SYSTEM_CONTEXT]（如现有角色列表、历史流程），检索匹配的最佳实践组合。
+
+步骤：
+1. 分析查询领域和需求（e.g., 代码开发流程）。
+2. 从系统目录中匹配：现有角色（e.g., Planner, Generator）、Prompt组合、流程模式（e.g., "需求→设计→实现"）。
+3. 如果匹配，提供现成JSON：roles（角色列表）、prompts（对应Prompt）、workflow（流程图）。
+4. 如果不匹配，建议新组合或触发外部研究。
+5. 强调复用优先，避免冗余。
+
+输出严格JSON：
+{
+  "matched": true/false,
+  "recommended_roles": [...],
+  "recommended_prompts": {...},
+  "recommended_workflow": "seq: task1 → task2",
+  "suggestions": "如果不匹配，可用Domain Researcher补充"
+}
+内在Skills：匹配算法（相似度计算）、目录查询、组合推荐。
+外部Skills：conversation_search（检索历史对话中的模板）、x_semantic_search（如果系统目录扩展到X上共享的最佳实践）。
+边界定义：只检索和推荐，不修改系统或生成新内容。输出作为Planner的输入参考。
+在框架中的位置：用户输入 → Template Retriever → Domain Researcher → Planner → ...（先查内部模板，如果没匹配再外部研究）。
+
+更新后的所有Agent Prompt和Skills表格
+我将新角色Template Retriever添加到表格中，并保持原有结构。其他角色不变，只是流程中新增这个作为起点。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Agent 名称核心Prompt模板内在Skills外部SkillsTemplate Retriever
+(模板检索者)你是一个系统模板检索专家。给定用户查询[USER_QUERY]和当前系统上下文[SYSTEM_CONTEXT]（如现有角色列表、历史流程），检索匹配的最佳实践组合。
+
+步骤：
+1. 分析查询领域和需求（e.g., 代码开发流程）。
+2. 从系统目录中匹配：现有角色（e.g., Planner, Generator）、Prompt组合、流程模式（e.g., "需求→设计→实现"）。
+3. 如果匹配，提供现成JSON：roles（角色列表）、prompts（对应Prompt）、workflow（流程图）。
+4. 如果不匹配，建议新组合或触发外部研究。
+5. 强调复用优先，避免冗余。
+
+输出严格JSON：
+{
+  "matched": true/false,
+  "recommended_roles": [...],
+  "recommended_prompts": {...},
+  "recommended_workflow": "seq: task1 → task2",
+  "suggestions": "如果不匹配，可用Domain Researcher补充"
+}匹配算法、目录查询、组合推荐conversation_search（检索历史模板）、x_semantic_search（外部共享实践）Domain Researcher
+(领域研究员)你是一个专业的领域研究员兼情报分析师。
+用户当前任务领域是：[DOMAIN]（例如：软件开发中的Web应用、医疗问诊、区块链智能合约等）
+具体任务描述：[USER_QUERY]
+
+请从以下维度全面收集并总结该领域的最佳实践：
+1. 当前最主流的技术栈/方法论/流程（2024-2026年最新）
+2. 顶级公司或项目的成熟实践案例（例如：Google、OpenAI、医院标准等）
+3. 推荐的子智能体分工结构（已验证有效的多Agent模式）
+4. 常见失败模式和风险点（要重点强调）
+5. 关键Prompt工程技巧或工具推荐
+6. 最新论文、报告、开源框架推荐
+
+输出严格使用JSON格式：
+{
+  "domain": "xxx",
+  "key_best_practices": [...],
+  "recommended_agent_structure": [...],
+  "common_pitfalls": [...],
+  "recommended_tools": [...],
+  "sources": ["链接1", "链接2"],
+  "confidence": 0.9
+}领域分析、文献总结、模式识别、风险评估web_search（搜索最佳实践）、browse_page（深入阅读文章/论文）、x_keyword_search（收集X上业内讨论）、code_execution（验证代码实践）Planner
+(规划者)你是一个任务规划专家。给定用户查询[USER_QUERY]和可选上下文[CONTEXT]（如历史计划或Domain Researcher的报告），分析场景，拆解成高层次任务树。输出JSON格式，包括：tasks（任务列表，按顺序）、sub_agents_needed（所需子智能体类型和描述）、workflow_type（seq:串行, par:并行, hybrid:混合）、dependencies（任务间依赖，如'task2 depends on task1'）。确保计划自适应、覆盖边缘ケース。任务分解、依赖分析、场景识别web_search（研究类似计划）、conversation_search（回顾历史对话）Generator
+(生成者)你是一个智能体生成工厂。给定计划JSON[PLAN]，为每个sub_agents_needed生成子智能体配置。输出JSON列表，每个包括：agent_type、prompt_template（自定义Prompt，如'作为[ROLE]，执行[TASK]'）、tools（工具列表）、skills（能力描述）。使用Few-Shot示例优化Prompt。Prompt工程、模板填充browse_page（获取Prompt灵感）、x_semantic_search（搜索AI Prompt示例）Orchestrator
+(协调者)你是一个工作流协调者。给定子智能体配置[SUB_AGENTS]和计划[PLAN]，调度执行。管理顺序、并行和数据传递。输出执行日志JSON，包括：results（每个任务输出）、status（success/fail）、exceptions。调度算法、异常处理code_execution（测试子输出）、web_search（动态资源获取）Evaluator
+(评估者)你是一个质量评估专家。给定执行结果[RESULTS]和原计划[PLAN]，评估准确性、一致性和完整性。输出JSON：score（0-1浮点，如0.85）、feedback（改进建议，如'输出缺少细节'）、pass（true/false）。使用rubric：准确50%、完整30%、效率20%。评分rubric应用、反馈生成view_image（评估视觉输出）、browse_pdf_attachment（检查附件）Learner
+(学习者，可选)你是一个自学习模块。从历史执行[HISTORY]中提取模式。给定新查询[QUERY]，输出优化建议JSON：improved_plan（调整计划）、improved_prompts（新模板）。使用相似性匹配。模式识别、Few-Shot学习conversation_search（增强历史）、x_keyword_search（搜索AI学习模式）Integrator
+(整合者，可选)你是一个输出整合者。给定所有结果[RESULTS]和评估[EVAL]，合成用户友好响应。输出结构化文本：summary、details、recommendations。确保一致性。内容合成、格式化search_images（增强响应视觉）、view_image（验证图像）
+这个新角色完美补上了“复用现有最佳实践”的缺口，能让框架更高效。如果你觉得名称或Prompt需要调整，或者想测试某个场景下的模板检索，我们可以继续细化！是这样，你是否可以把我们最初的讨论需求和思考过程以及给出来的方案梳理成一个完备的markdown文档，我来备份一下智能体编排框架设计文档
+文档概述
+本文档基于我们对话的完整历史，梳理用户最初提出的需求、思考过程以及逐步形成的方案。目的是构建一套“元AI引擎”或“智能体工厂”，能够动态生成子智能体、提示词、任务计划和工作流，支持各种场景（如代码开发、医疗咨询）。文档用于备份和参考，内容自包含且逻辑清晰。
+
+文档版本：基于2026年1月31日对话历史。
+作者贡献：用户（Lisa）提出需求和迭代建议；Grok 4（xAI）提供设计方案。
+关键原则：模块化、复用优先、自适应、参考游戏引擎的动态流程。
+
+需求概述
+用户最初需求
+
+构建一套智能体编排框架，像一个“引擎”一样，能：
+生产子智能体（Worker Agents）。
+生产新的提示词（Prompts）。
+构建任务、计划和工作流。
+支持动态生成和管理子智能体，根据用户输入适应不同场景。
+
+核心组件：几个“元智能体”（Meta-Agents），负责指挥和生成下游工作。
+分工与构建：定义元智能体角色、分工、边界；如何构建流程（参考游戏引擎等）。
+场景测试：
+代码开发：生成子智能体如需求拆解、原型设计、架构设计、代码实现、测试。
+医疗咨询（看病）：生成子智能体如问诊、查看、诊断、建议。
+其他场景：内容创作、业务分析等，框架需灵活扩展。
+
+
+需求关键点
+
+假设用户输入触发框架，自动生成并执行。
+强调自适应：如反馈循环、学习优化。
+技术实现：用Python + LLM库（如LangChain），注入工具（如code_execution、web_search）。
+挑战：成本控制、一致性、安全性。
+
+思考过程
+对话从初始方案开始，逐步迭代添加角色，以解决缺失环节。以下是 chronological 思考步骤：
+
+初始方案（第一次响应）：
+建议4-6个核心元智能体：Planner、Generator、Orchestrator、Evaluator、Learner（可选）、Integrator（可选）。
+分工：Planner拆任务、Generator生成子智能体、Orchestrator协调执行、Evaluator评估、Learner学习、Integrator整合。
+流程：参考游戏引擎（Init → Update Loop → Render → Cleanup）。
+边界：消息传递（JSON）、分离关注点。
+场景测试：代码开发（需求→架构→代码）、医疗（问诊→诊断）。
+
+第一次迭代（用户反馈：细化每个Agent设计）：
+详细每个Agent的Prompt、Skills、边界。
+Skills分为内在（逻辑能力）和外部（工具如web_search）。
+边界策略：JSON Schema验证、依赖图、作用域限制。
+
+第二次迭代（用户指出缺失：领域最佳实践收集者）：
+识别问题：首次处理新领域时，缺少外部情报，导致计划不专业。
+添加Domain Researcher：收集最佳实践、案例、风险。
+位置：用户输入 → Domain Researcher → Planner。
+优势：提升首次质量；缺点：延迟/成本（用缓存缓解）。
+
+第三次迭代（输出Prompt和Skills表格）：
+以表格形式呈现所有Agent的Prompt和Skills。
+确认Domain Researcher集成。
+
+第四次迭代（用户指出缺失：系统内最佳实践检索）：
+识别问题：缺少检索现有模板/组合的机制，导致重复工作。
+添加Template Retriever：查询系统目录，复用角色/Prompt/流程。
+位置：用户输入 → Template Retriever → Domain Researcher → Planner。
+强调复用优先，如果不匹配触发外部研究。
+
+总体思考总结：
+从最小化角色起步，逐步补缺（情报收集 → 内部复用）。
+灵感来源：多Agent系统（如AutoGen）、游戏引擎（动态循环）、Prompt工程最佳实践。
+优化焦点：效率（缓存/复用）、质量（反馈循环）、扩展性（可选角色）。
+
+
+最终方案
+整体架构
+
+核心组件：8个元智能体（2个可选），每个用LLM实例实现，自定义Prompt定义行为。
+流程图（参考游戏引擎）：
+初始化：用户输入 → Template Retriever（查内部模板） → Domain Researcher（若需外部情报） → Planner（生成计划）。
+更新循环：Generator（生成子智能体） → Orchestrator（执行协调） → Evaluator（评估）。
+渲染：Integrator（整合输出）。
+清理：Learner（存储经验）。
+反馈：Evaluator低分触发迭代（回Planner）。
+
+实现建议：
+Python类：MetaAgentEngine，每个Agent为子类。
+通信：JSON消息传递，Schema验证。
+工具注入：外部Skills从可用工具（如web_search）中选择。
+内存：向量数据库（FAISS）存储历史/模板。
+
+边界原则：单一责任、读-only历史、代理工具调用。
+
+元智能体角色列表
+以下表格总结所有角色（包括新增）。每个角色专注一件事，避免重叠。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Agent 名称主要职责位置在流程中Template Retriever (模板检索者)检索系统内现有角色/Prompt/流程组合，如果匹配直接复用。起点：用户输入后第一步。Domain Researcher (领域研究员)收集外部领域最佳实践、案例、风险，为首次任务提供情报。Template Retriever后，如果无匹配。Planner (规划者)拆解用户输入成任务树、子智能体需求、工作流。情报收集后。Generator (生成者)生成子智能体配置、自定义Prompt、工具分配。Planner后。Orchestrator (协调者)调度子智能体执行、数据传递、异常处理。Generator后。Evaluator (评估者)评估输出质量，提供反馈触发迭代。Orchestrator后。Learner (学习者，可选)从历史学习，优化未来计划/Prompt。清理阶段，并行。Integrator (整合者，可选)合成最终用户响应。渲染阶段，终端。
+每个角色的详细设计
+1. Template Retriever (模板检索者)
+
+核心Prompt模板：text你是一个系统模板检索专家。给定用户查询[USER_QUERY]和当前系统上下文[SYSTEM_CONTEXT]（如现有角色列表、历史流程），检索匹配的最佳实践组合。
+
+步骤：
+1. 分析查询领域和需求（e.g., 代码开发流程）。
+2. 从系统目录中匹配：现有角色（e.g., Planner, Generator）、Prompt组合、流程模式（e.g., "需求→设计→实现"）。
+3. 如果匹配，提供现成JSON：roles（角色列表）、prompts（对应Prompt）、workflow（流程图）。
+4. 如果不匹配，建议新组合或触发外部研究。
+5. 强调复用优先，避免冗余。
+
+输出严格JSON：
+{
+  "matched": true/false,
+  "recommended_roles": [...],
+  "recommended_prompts": {...},
+  "recommended_workflow": "seq: task1 → task2",
+  "suggestions": "如果不匹配，可用Domain Researcher补充"
+}
+内在Skills：匹配算法、目录查询、组合推荐。
+外部Skills：conversation_search（检索历史模板）、x_semantic_search（外部共享实践）。
+边界：只检索推荐，不修改系统。输出作为Planner参考。
+
+2. Domain Researcher (领域研究员)
+
+核心Prompt模板：text你是一个专业的领域研究员兼情报分析师。
+用户当前任务领域是：[DOMAIN]（例如：软件开发中的Web应用、医疗问诊、区块链智能合约等）
+具体任务描述：[USER_QUERY]
+
+请从以下维度全面收集并总结该领域的最佳实践：
+1. 当前最主流的技术栈/方法论/流程（2024-2026年最新）
+2. 顶级公司或项目的成熟实践案例（例如：Google、OpenAI、医院标准等）
+3. 推荐的子智能体分工结构（已验证有效的多Agent模式）
+4. 常见失败模式和风险点（要重点强调）
+5. 关键Prompt工程技巧或工具推荐
+6. 最新论文、报告、开源框架推荐
+
+输出严格使用JSON格式：
+{
+  "domain": "xxx",
+  "key_best_practices": [...],
+  "recommended_agent_structure": [...],
+  "common_pitfalls": [...],
+  "recommended_tools": [...],
+  "sources": ["链接1", "链接2"],
+  "confidence": 0.9
+}
+内在Skills：领域分析、文献总结、模式识别、风险评估。
+外部Skills：web_search、browse_page、x_keyword_search、code_execution。
+边界：只收集总结，不生成计划。输出喂给Planner。
+
+3. Planner (规划者)
+
+核心Prompt模板：text你是一个任务规划专家。给定用户查询[USER_QUERY]和可选上下文[CONTEXT]（如历史计划或Domain Researcher的报告），分析场景，拆解成高层次任务树。输出JSON格式，包括：tasks（任务列表，按顺序）、sub_agents_needed（所需子智能体类型和描述）、workflow_type（seq:串行, par:并行, hybrid:混合）、dependencies（任务间依赖，如'task2 depends on task1'）。确保计划自适应、覆盖边缘ケース。
+内在Skills：任务分解、依赖分析、场景识别。
+外部Skills：web_search、conversation_search。
+边界：只规划，不执行。依赖上游情报。
+
+4. Generator (生成者)
+
+核心Prompt模板：text你是一个智能体生成工厂。给定计划JSON[PLAN]，为每个sub_agents_needed生成子智能体配置。输出JSON列表，每个包括：agent_type、prompt_template（自定义Prompt，如'作为[ROLE]，执行[TASK]'）、tools（工具列表）、skills（能力描述）。使用Few-Shot示例优化Prompt。
+内在Skills：Prompt工程、模板填充。
+外部Skills：browse_page、x_semantic_search。
+边界：只生成配置，不评估。
+
+5. Orchestrator (协调者)
+
+核心Prompt模板：text你是一个工作流协调者。给定子智能体配置[SUB_AGENTS]和计划[PLAN]，调度执行。管理顺序、并行和数据传递。输出执行日志JSON，包括：results（每个任务输出）、status（success/fail）、exceptions。
+内在Skills：调度算法、异常处理。
+外部Skills：code_execution、web_search。
+边界：只协调，不修改计划。
+
+6. Evaluator (评估者)
+
+核心Prompt模板：text你是一个质量评估专家。给定执行结果[RESULTS]和原计划[PLAN]，评估准确性、一致性和完整性。输出JSON：score（0-1浮点，如0.85）、feedback（改进建议，如'输出缺少细节'）、pass（true/false）。使用rubric：准确50%、完整30%、效率20%。
+内在Skills：评分rubric应用、反馈生成。
+外部Skills：view_image、browse_pdf_attachment。
+边界：只评估，不干预上游。
+
+7. Learner (学习者，可选)
+
+核心Prompt模板：text你是一个自学习模块。从历史执行[HISTORY]中提取模式。给定新查询[QUERY]，输出优化建议JSON：improved_plan（调整计划）、improved_prompts（新模板）。使用相似性匹配。
+内在Skills：模式识别、Few-Shot学习。
+外部Skills：conversation_search、x_keyword_search。
+边界：只优化建议，不强制。
+
+8. Integrator (整合者，可选)
+
+核心Prompt模板：text你是一个输出整合者。给定所有结果[RESULTS]和评估[EVAL]，合成用户友好响应。输出结构化文本：summary、details、recommendations。确保一致性。
+内在Skills：内容合成、格式化。
+外部Skills：search_images、view_image。
+边界：只整合现有输出。
+
+场景示例
+
+代码开发：Template Retriever查模板 → Domain Researcher集实践（如React+Node） → Planner拆任务 → 生成Coder等子Agent → 执行 → 评估 → 输出代码包。
+医疗咨询：类似，生成Inquirer、Diagnoser等；强调非专业建议。
+扩展：新场景如投资分析，可复用模板或研究新实践。
+
+参考与扩展
+
+参考框架：AutoGen、CrewAI、LangGraph；游戏引擎（Unity主循环）。
+潜在扩展：添加Security Checker（安全角色）；集成更多工具；部署到云。
+风险：Token成本高、LLM幻觉；缓解：缓存、验证。
+下一步：原型实现Python代码；测试真实场景。
+
+此文档可作为备份，如需更新，请提供新反馈！
